@@ -16,14 +16,18 @@ agent*. If they differ, stop and contact AOD.
 
 ## Install
 
-As root on the server. Set `VER` to the version you want (the latest is at
-the top of [Releases](https://github.com/aodsupport/tune-agent-releases/releases))
-and `ARCH` to `amd64` (x86_64) or `arm64`. You need `curl`, `gnupg2` and
-`tar`. Every step must succeed; the chain stops at the first failure.
+As root on the server, from a root login shell (`sudo -i`). Set `VER` to
+the version you want (the latest is at the top of
+[Releases](https://github.com/aodsupport/tune-agent-releases/releases)) and
+`ARCH` to `amd64` (x86_64) or `arm64`. You need `curl`, `gnupg2` and `tar`.
+The chain runs in a cleared environment (`env -i`), so no inherited setting
+(for example `TAR_OPTIONS` or a curl or gpg configuration variable) can
+change what it does. Every step must succeed; it stops at the first failure.
 
 ```sh
-FPR=1F326385FC714E733AEF04AE0F3135670B13386A
 VER=0.1.0; ARCH=amd64
+env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C HOME=/root VER="$VER" ARCH="$ARCH" /bin/bash -p -s <<'BLOCK'
+FPR=1F326385FC714E733AEF04AE0F3135670B13386A
 D=https://github.com/aodsupport/tune-agent-releases/releases/download/agent-v$VER
 if command -v gpg2 >/dev/null 2>&1; then GPG=gpg2; elif command -v gpg >/dev/null 2>&1; then GPG=gpg; else echo "install gnupg2" >&2; false; fi &&
 T=$(mktemp -d) && cd "$T" && export GNUPGHOME="$T/gpg" && mkdir -m 700 "$GNUPGHOME" &&
@@ -33,14 +37,16 @@ curl -fsSL https://raw.githubusercontent.com/aodsupport/tune-agent-releases/main
 "$GPG" --batch --status-fd 3 --verify SHA256SUMS.asc SHA256SUMS 3>"$T/gpg.status" &&
 grep -q "^\[GNUPG:\] VALIDSIG $FPR " "$T/gpg.status" &&
 grep " tune-agent-$VER-linux-$ARCH.tar.gz\$" SHA256SUMS | sha256sum -c - &&
-tar xzf "tune-agent-$VER-linux-$ARCH.tar.gz" && "./tune-agent-$VER/install.sh"
+tar --no-same-owner -xzf "tune-agent-$VER-linux-$ARCH.tar.gz" && "./tune-agent-$VER/install.sh" < /dev/null &&
+echo "release files (uninstall.sh): $T/tune-agent-$VER"
+BLOCK
 ```
 
 The installer puts the agent in `/usr/bin/tune-agent`, the systemd unit in
 `/etc/systemd/system/tune-agent.service`, pins this release key in
 `/etc/aod-tune-release` and installs `tune-agent-upgrade` for later
-upgrades. It does not start anything yet. Keep the extracted directory if
-you may want `uninstall.sh` later.
+upgrades. It does not start anything yet. The last line names the
+extracted release directory; keep it if you may want `uninstall.sh` later.
 
 ## Database user
 
