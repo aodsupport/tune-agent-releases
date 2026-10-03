@@ -25,12 +25,12 @@ The chain runs in a cleared environment (`env -i`), so no inherited setting
 change what it does. Every step must succeed; it stops at the first failure.
 
 ```sh
-VER=0.1.0; ARCH=amd64
+VER=0.1.1; ARCH=amd64
 env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C HOME=/root VER="$VER" ARCH="$ARCH" /bin/bash -p -s <<'BLOCK'
 FPR=1F326385FC714E733AEF04AE0F3135670B13386A
 D=https://github.com/aodsupport/tune-agent-releases/releases/download/agent-v$VER
 if command -v gpg2 >/dev/null 2>&1; then GPG=gpg2; elif command -v gpg >/dev/null 2>&1; then GPG=gpg; else echo "install gnupg2" >&2; false; fi &&
-T=$(mktemp -d) && cd "$T" && export GNUPGHOME="$T/gpg" && mkdir -m 700 "$GNUPGHOME" &&
+T=$(mktemp -d "$HOME/.aod-tune-install.XXXXXX") && cd "$T" && export GNUPGHOME="$T/gpg" && mkdir -m 700 "$GNUPGHOME" &&
 printf '%s\n' "$FPR" | grep -qx '[0-9A-F]\{40\}' &&
 curl -fsSLO "$D/tune-agent-$VER-linux-$ARCH.tar.gz" -O "$D/SHA256SUMS" -O "$D/SHA256SUMS.asc" &&
 curl -fsSL https://raw.githubusercontent.com/aodsupport/tune-agent-releases/main/aod-tune-release.asc | "$GPG" --batch --import &&
@@ -61,8 +61,9 @@ CREATE USER 'tune-agent'@'localhost' IDENTIFIED VIA unix_socket;
 GRANT SLAVE MONITOR ON *.* TO 'tune-agent'@'localhost';
 ```
 
-MySQL or Percona 8.x, and older MariaDB (password account over the local
-socket):
+MySQL or Percona 8.x, older MariaDB, and MariaDB without the unix_socket
+plugin loaded (the CREATE USER above fails with "Plugin 'unix_socket' is not
+loaded", common on cPanel servers): a password account over the local socket:
 
 ```sql
 CREATE USER 'aod_tune'@'localhost' IDENTIFIED BY '<a random 32-character password>';
@@ -107,7 +108,12 @@ tune-agent-upgrade X.Y.Z
 
 From the extracted release directory: `./uninstall.sh` (keeps
 `/etc/aod-tune` and the pinned key) or `./uninstall.sh --purge`. Then ask
-AOD to revoke the host, and drop the database user.
+AOD to revoke the host, and drop the database user. To install again later:
+after `./uninstall.sh`, the install block above works as is; after
+`./uninstall.sh --purge` (which keeps the `tune-agent` system user and group),
+run the install block, then from the new release directory `./install.sh
+--adopt` (or remove the user and group first: `userdel tune-agent; groupdel
+tune-agent`).
 
 ## Supported systems
 
@@ -121,6 +127,7 @@ AOD to revoke the host, and drop the database user.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.1.1 | 2026-10-03 | Install and upgrade work on hosts with a noexec /tmp (cPanel); clearer reinstall-after-purge and database-user guidance. |
 | 0.1.0 | 2026-10-01 | First release (early access). |
 
 Security issues: open a ticket at https://my.aod.net/ (Admin on Demand support).
